@@ -1,26 +1,67 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* ---- Ocean Blue & White identity for HOLA ---- */
+  /* Primary sea blue — used for buttons, icons, titles, links, key borders, hover. */
+  --color-brown: #0077B6;
+  /* A softer blue ONLY for secondary text. */
+  --color-brown-soft: #0096C7;
+  /* Light cyan/blue neutrals for hairlines and rare surfaces. */
+  --color-muted: #90E0EF;
+  --color-hairline: #CAF0F8;
+
+  /* ---- Status colors ---- */
+  --color-success: #2A9D8F;
+  --color-error: #E63946;
+  --color-warning: #F4A261;
+
+  /* ---- Tokens updated to match HOLA ocean theme ---- */
+  --color-gold: #023E8A;
+  --color-rose: #0077B6;
+  --color-rose-text: #0077B6;
+  --color-sand: #EDF6F9;
+  --color-cream: #FFFFFF;
+
+  --font-serif: var(--font-cormorant), serif;
+  --font-sans: var(--font-sans-custom), sans-serif;
+  --font-logo: var(--font-logo), serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Logo — used for the HOLA wordmark. */
+.font-logo {
+  font-family: var(--font-logo);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #FFFFFF;
+  color: #03045E;
+}
+
+/* Marquee — slower (60s) for a calmer scroll */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 60s linear infinite;
+}
+
+/* Hero fade-up: content gently rises and fades in on page load */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hero-fade {
+  animation: fadeUp 0.7s ease-out both;
+}
+.hero-fade-delayed {
+  animation: fadeUp 0.7s ease-out 0.15s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .hero-fade,
+  .hero-fade-delayed {
+    animation: none;
+  }
 }
