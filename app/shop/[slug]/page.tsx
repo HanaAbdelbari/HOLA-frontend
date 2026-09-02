@@ -1,167 +1,232 @@
-import { Metadata } from "next";
-import { notFound } from "next/navigation";
-import ProductGallery from "../../components/ProductGallery";
-import AddToCartSection from "../../components/AddToCartSection";
-import RelatedProducts from "../../components/RelatedProducts";
+"use client";
 
-type ProductDetail = {
+import { useEffect, useState, use } from "react";
+import Image from "next/image";
+
+type ProductVariant = {
+  id?: number;
+  label: string;
+  price?: number;
+  stockQuantity: number;
+};
+
+type Product = {
   id: number;
   name: string;
   slug: string;
-  description: string | null;
+  description?: string;
   price: number;
-  salePrice: number | null;
-  onSale: boolean;
-  discountPercent: number | null;
-  material: string | null;
-  size: string | null;
-  chainLength: string | null;
+  salePrice?: number;
   stockQuantity: number;
-  inStock: boolean;
-  categoryName: string;
-  categorySlug: string;
   images: string[];
+  variants: ProductVariant[];
 };
 
-async function getProduct(slug: string): Promise<ProductDetail | null> {
-  try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/products/${slug}`, {
-      cache: "no-store",
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error("Failed to fetch product");
-    return res.json();
-  } catch (error) {
-    return null;
-  }
-}
-
-export async function generateMetadata({
-  params,
+function VariantSelector({
+  title,
+  variants,
+  selectedVariant,
+  onSelect,
 }: {
-  params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
-  const { slug } = await params;
-  const product = await getProduct(slug);
-
-  if (!product) {
-    return {
-      title: "Product Not Found",
-    };
-  }
-
-  return {
-    title: product.name,
-    description: product.description || `Buy ${product.name} at Lumière. Elegant stainless steel accessories.`,
-    openGraph: {
-      title: `${product.name} | Lumière`,
-      description: product.description || `Buy ${product.name} at Lumière.`,
-      images: product.images.length > 0 ? [{ url: product.images[0] }] : [],
-    },
-  };
+  title: string;
+  variants: ProductVariant[];
+  selectedVariant: ProductVariant | null;
+  onSelect: (variant: ProductVariant) => void;
+}) {
+  return (
+    <div className="mt-5">
+      <p className="mb-2 text-sm font-medium text-brown">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {variants.map((variant, index) => (
+          <button
+            key={variant.id || index}
+            type="button"
+            onClick={() => onSelect(variant)}
+            disabled={variant.stockQuantity === 0}
+            className={`rounded-md border px-3 py-2 text-sm transition-colors ${
+              selectedVariant?.label === variant.label
+                ? "border-brown bg-brown text-white"
+                : "border-hairline text-brown hover:bg-gray-50"
+            } disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            {variant.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-export default async function ProductPage({
+export default function ProductDetailPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { slug } = await params;
-  const product = await getProduct(slug);
-  if (!product) notFound();
+  const resolvedParams = use(params);
+  const slug = resolvedParams.slug;
 
-  const attributes = [
-    { label: "Material", value: product.material },
-    { label: "Size", value: product.size },
-    { label: "Chain length", value: product.chainLength },
-  ].filter((a) => a.value);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [selectedImage, setSelectedImage] = useState<string>("");
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [quantity, setQuantity] = useState(1);
+
+  useEffect(() => {
+    async function fetchProduct() {
+      try {
+        setLoading(true);
+        const res = await fetch(`http://localhost:8080/api/products/${slug}`);
+        if (!res.ok) {
+          throw new Error("Product not found");
+        }
+        const data: Product = await res.json();
+        setProduct(data);
+
+        // ضبط الصورة الرئيسية الافتراضية
+        if (data.images && data.images.length > 0) {
+          setSelectedImage(data.images[0]);
+        }
+
+        // اختيار أول Variant متوفر
+        if (data.variants && data.variants.length > 0) {
+          const firstAvailable = data.variants.find((v) => v.stockQuantity > 0) || data.variants[0];
+          setSelectedVariant(firstAvailable);
+        }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to load product");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (slug) {
+      fetchProduct();
+    }
+  }, [slug]);
+
+  const handleSelectVariant = (variant: ProductVariant) => {
+    setSelectedVariant(variant);
+    if (quantity > variant.stockQuantity) {
+      setQuantity(Math.max(1, variant.stockQuantity));
+    }
+  };
+
+  if (loading) {
+    return <div className="p-12 text-center text-brown">Loading product details...</div>;
+  }
+
+  if (error || !product) {
+    return <div className="p-12 text-center text-red-500">Product not found!</div>;
+  }
+
+  const currentPrice = selectedVariant?.price ?? product.salePrice ?? product.price;
+  const maxStock = selectedVariant ? selectedVariant.stockQuantity : product.stockQuantity;
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-5">
-      <div className="mb-3 text-sm text-brown-soft">
-        Home › {product.categoryName} › {product.name}
+    <div className="max-w-4xl mx-auto p-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+      {/* 1. معرض الصور (Image Gallery) */}
+      <div className="flex flex-col gap-4">
+        <div className="relative aspect-square w-full overflow-hidden rounded-lg border bg-gray-50">
+          {selectedImage ? (
+            <img
+              src={selectedImage}
+              alt={product.name}
+              className="h-full w-full object-cover object-center"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-gray-400">No Image</div>
+          )}
+        </div>
+
+        {/* المصغرات (Thumbnails) */}
+        {product.images && product.images.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {product.images.map((imgUrl, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setSelectedImage(imgUrl)}
+                className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md border ${
+                  selectedImage === imgUrl ? "border-brown ring-2 ring-brown" : "border-gray-200"
+                }`}
+              >
+                <img src={imgUrl} alt="" className="h-full w-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="grid gap-4 md:gap-10 md:grid-cols-[44%_56%] items-start">
-        <ProductGallery
-          images={product.images}
-          name={product.name}
-          onSale={product.onSale}
-          discountPercent={product.discountPercent}
-        />
+      {/* 2. تفاصيل المنتج والتفاعل */}
+      <div className="flex flex-col">
+        <h1 className="font-serif text-3xl text-brown">{product.name}</h1>
+        
+        <p className="text-2xl font-semibold text-brown mt-2">
+          {currentPrice.toFixed(2)} EGP
+        </p>
 
-        <div>
-          <h1 className="font-serif text-lg text-brown">{product.name}</h1>
+        {product.description && (
+          <p className="mt-4 text-sm text-gray-600 leading-relaxed">{product.description}</p>
+        )}
 
-          <div className="mt-1 flex items-center gap-3">
-            {product.onSale ? (
-              <>
-                <span className="text-lg font-medium text-brown">
-                  EGP {product.salePrice}
-                </span>
-                <span className="text-sm text-muted line-through">
-                  EGP {product.price}
-                </span>
-                <span className="rounded-full bg-brown px-2 py-0.5 text-[10px] font-medium text-white">
-                  -{product.discountPercent}%
-                </span>
-              </>
-            ) : (
-              <span className="text-lg font-medium text-brown">
-                EGP {product.price}
-              </span>
-            )}
-          </div>
-
-          {attributes.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {attributes.map((attr) => (
-                <div
-                  key={attr.label}
-                  className="rounded-full border border-hairline px-3 py-1.5"
-                >
-                  <span className="text-xs text-muted">{attr.label}: </span>
-                  <span className="text-xs text-brown">{attr.value}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {product.description && (
-            <p className="mt-2 text-xs leading-relaxed text-brown-soft">
-              {product.description}
-            </p>
-          )}
-
-          <div className="mt-3 mb-2">
-            {product.inStock ? (
-              product.stockQuantity > 0 && product.stockQuantity <= 3 && (
-                <p className="text-sm font-medium text-error">
-                  Only {product.stockQuantity} pieces remaining
-                </p>
-              )
-            ) : (
-              <p className="text-sm text-muted">Out of stock</p>
-            )}
-          </div>
-
-          <AddToCartSection
-            id={product.id}
-            slug={product.slug}
-            name={product.name}
-            price={product.onSale ? product.salePrice! : product.price}
-            imageUrl={product.images[0] ?? null}
-            attributes={attributes.map((a) => a.value).join(" · ")}
-            inStock={product.inStock}
-            stockQuantity={product.stockQuantity}
+        {/* الخيارات المتاحة */}
+        {product.variants && product.variants.length > 0 && (
+          <VariantSelector
+            title="Select Option"
+            variants={product.variants}
+            selectedVariant={selectedVariant}
+            onSelect={handleSelectVariant}
           />
+        )}
+
+        {/* حالة الستوك */}
+        {selectedVariant && (
+          <p className="mt-3 text-xs text-brown-soft">
+            {selectedVariant.stockQuantity === 0
+              ? "Out of stock"
+              : selectedVariant.stockQuantity === 1
+              ? "Only 1 item left in stock!"
+              : `${selectedVariant.stockQuantity} items available`}
+          </p>
+        )}
+
+        {/* العداد وزر الإضافة */}
+        <div className="mt-6 flex items-center gap-3">
+          <div className="flex items-center border border-hairline rounded-md bg-white px-3 py-2 text-sm">
+            <button
+              type="button"
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              disabled={quantity <= 1}
+              className="px-2 text-brown hover:bg-gray-100 rounded disabled:opacity-30"
+            >
+              -
+            </button>
+            <span className="px-3 font-medium text-brown">{quantity}</span>
+            <button
+              type="button"
+              onClick={() => setQuantity((q) => Math.min(maxStock, q + 1))}
+              disabled={quantity >= maxStock || maxStock === 0}
+              className="px-2 text-brown hover:bg-gray-100 rounded disabled:opacity-30"
+            >
+              +
+            </button>
+          </div>
+
+          <button
+            type="button"
+            disabled={maxStock === 0 || ((product.variants?.length ?? 0) > 0 && !selectedVariant)}
+            className={`flex-1 rounded-md py-3 text-sm font-medium transition-colors ${
+              maxStock > 0
+                ? "bg-brown text-white hover:bg-[#4E342E]"
+                : "bg-gray-200 text-gray-500 cursor-not-allowed"
+            }`}
+          >
+            {maxStock === 0 ? "Out of Stock" : "Add to Cart"}
+          </button>
         </div>
       </div>
-
-      <RelatedProducts
-        categorySlug={product.categorySlug}
-        currentSlug={product.slug}
-      />
-    </main>
+    </div>
   );
 }
