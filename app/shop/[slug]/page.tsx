@@ -95,7 +95,7 @@ export default function ProductDetailPage({
     async function fetchProduct() {
       try {
         setLoading(true);
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://hola-backend-2f72.onrender.com";
         const res = await fetch(`${baseUrl}/api/products/${slug}`);
 
         if (!res.ok) {
