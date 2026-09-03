@@ -85,7 +85,12 @@ export default function CheckoutPage() {
           governorate: form.governorate,
           address: form.address,
           notes: form.notes,
-          items: items.map((i) => ({ productId: i.id, quantity: i.quantity })),
+          // ⚡ تم التعديل هنا: استخدام الـ attributes كـ variantLabel لكي يستقبلها الباك إند صح ⚡
+          items: items.map((i) => ({ 
+            productId: i.id, 
+            quantity: i.quantity,
+            variantLabel: i.attributes || null 
+          })),
         }),
       });
 

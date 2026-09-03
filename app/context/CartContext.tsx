@@ -57,18 +57,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   function addItem(item: Omit<CartItem, "quantity">, quantity: number) {
     setItems((current) => {
-      const existing = current.find((i) => i.id === item.id);
+      // التحقق من وجود نفس المنتج بنفس اللون (attributes)
+      const existing = current.find(
+        (i) => i.id === item.id && i.attributes === item.attributes
+      );
       const maxStock = item.stockQuantity ?? Infinity;
 
       if (existing) {
         const newQuantity = existing.quantity + quantity;
         if (newQuantity > maxStock) {
           return current.map((i) =>
-            i.id === item.id ? { ...i, quantity: maxStock, stockQuantity: maxStock } : i
+            i.id === item.id && i.attributes === item.attributes
+              ? { ...i, quantity: maxStock, stockQuantity: maxStock }
+              : i
           );
         }
         return current.map((i) =>
-          i.id === item.id ? { ...i, quantity: newQuantity, stockQuantity: maxStock } : i
+          i.id === item.id && i.attributes === item.attributes
+            ? { ...i, quantity: newQuantity, stockQuantity: maxStock }
+            : i
         );
       }
 

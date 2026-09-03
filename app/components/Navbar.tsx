@@ -1,9 +1,12 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, ShoppingBag } from "lucide-react";
 import InstagramIcon from "./InstagramIcon";
 import { Playfair_Display } from "next/font/google";
+import { useCart } from "../context/CartContext";
 
-// استدعاء خط فخم مرسوم خصيصاً للوجو البراند
 const logoFont = Playfair_Display({
   subsets: ["latin"],
   weight: ["600", "700"],
@@ -11,6 +14,14 @@ const logoFont = Playfair_Display({
 });
 
 export default function Navbar() {
+  const { totalItems } = useCart();
+  const [mounted, setMounted] = useState(false);
+
+  // التأكد من إن الـ Component تم تحميله على المتصفح لمنع خطأ الـ Hydration
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <header className="sticky top-0 z-50 border-b border-hairline bg-white/95 backdrop-blur-md">
       <div className="mx-auto grid max-w-6xl grid-cols-3 items-center px-4 py-4 sm:px-6">
@@ -68,6 +79,12 @@ export default function Navbar() {
             className="relative transition-opacity hover:opacity-60"
           >
             <ShoppingBag size={20} />
+            {/* العرض فقط بعد الـ Mounting لمنع الـ Hydration Error */}
+            {mounted && totalItems > 0 && (
+              <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-brown text-[10px] font-bold text-white">
+                {totalItems}
+              </span>
+            )}
           </Link>
         </div>
 

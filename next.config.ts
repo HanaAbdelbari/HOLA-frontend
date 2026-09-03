@@ -1,8 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // حل تحذير تعدد ملفات الـ lockfile وربط المشروع بمجله الصحيح
+  turbopack: {
+    root: __dirname,
+  },
   images: {
-    // Next.js only loads images from domains you allow here (for security).
     remotePatterns: [
       {
         protocol: "https",

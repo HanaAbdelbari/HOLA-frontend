@@ -13,6 +13,16 @@ type Variant = {
   stockQuantity: number;
 };
 
+type ProductVariantResponse = {
+  id?: number;
+  label?: string;
+  variantLabel?: string;
+  name?: string;
+  price?: number | null;
+  stockQuantity?: number;
+  stock?: number;
+};
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -26,6 +36,7 @@ export default function ProductForm({ productId }: { productId?: number }) {
   const router = useRouter();
   const { token, isLoggedIn, logout } = useAdminAuth();
 
+  const [mounted, setMounted] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [slugEdited, setSlugEdited] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -55,8 +66,14 @@ export default function ProductForm({ productId }: { productId?: number }) {
   });
 
   useEffect(() => {
-    if (!isLoggedIn) router.replace("/admin");
-  }, [isLoggedIn, router]);
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isLoggedIn) {
+      router.replace("/admin");
+    }
+  }, [mounted, isLoggedIn, router]);
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/categories`)
@@ -86,8 +103,18 @@ export default function ProductForm({ productId }: { productId?: number }) {
           stockQuantity: String(detail.stockQuantity ?? 0),
           displayOrder: String(detail.displayOrder ?? 0),
         });
-        setImageUrls(detail.images ?? detail.imageUrls ?? []);
-        setVariants(detail.variants ?? []);
+        setImageUrls(detail.imageUrls ?? detail.images ?? []);
+        
+        const loadedVariants = detail.variants || detail.productVariants || detail.itemVariants || [];
+        setVariants(
+          loadedVariants.map((v: ProductVariantResponse) => ({
+            id: v.id,
+            label: v.label || v.variantLabel || v.name || "",
+            price: v.price ?? null,
+            stockQuantity: v.stockQuantity ?? v.stock ?? 0,
+          }))
+        );
+
         setSlugEdited(true);
       })
       .catch(() => {});
@@ -103,7 +130,6 @@ export default function ProductForm({ productId }: { productId?: number }) {
     });
   }
 
-  // إضافة Variant جديد للقائمة المحلية
   function addVariant() {
     if (!varLabel.trim()) return;
     const newVar: Variant = {
@@ -117,7 +143,6 @@ export default function ProductForm({ productId }: { productId?: number }) {
     setVarStock("0");
   }
 
-  // حذف Variant من القائمة
   function removeVariant(index: number) {
     setVariants((prev) => prev.filter((_, i) => i !== index));
   }
@@ -162,10 +187,8 @@ export default function ProductForm({ productId }: { productId?: number }) {
 
     setSaving(true);
 
-    // تجهيز قائمة الـ variants النهائية
     const finalVariants = [...variants];
 
-    // حماية: لو المستخدم كتب variant في الإينبوت ونسي يضغط "+ Add Variant"
     if (varLabel.trim()) {
       const unaddedVariant: Variant = {
         label: varLabel.trim(),
@@ -179,6 +202,9 @@ export default function ProductForm({ productId }: { productId?: number }) {
       setVarStock("0");
     }
 
+    const totalVariantStock = finalVariants.reduce((sum, v) => sum + Number(v.stockQuantity || 0), 0);
+    const finalStock = finalVariants.length > 0 ? totalVariantStock : Number(form.stockQuantity);
+
     const body = {
       categoryId: Number(form.categoryId),
       name: form.name,
@@ -190,7 +216,7 @@ export default function ProductForm({ productId }: { productId?: number }) {
       size: form.size || null,
       dimensions: form.dimensions || null,
       color: form.color || null,
-      stockQuantity: Number(form.stockQuantity),
+      stockQuantity: finalStock,
       displayOrder: Number(form.displayOrder),
       imageUrls: imageUrls,
       variants: finalVariants,
@@ -226,7 +252,7 @@ export default function ProductForm({ productId }: { productId?: number }) {
     }
   }
 
-  if (!isLoggedIn) return null;
+  if (!mounted || !isLoggedIn) return null;
 
   const input =
     "mt-1 w-full rounded-md border border-hairline bg-white px-3 py-2 text-sm text-brown focus:border-brown focus:outline-none";
@@ -308,7 +334,7 @@ export default function ProductForm({ productId }: { productId?: number }) {
           <label className={labelC}>Color (optional)</label>
           <input
             className={input}
-            placeholder="e.g. Ocean Blue"
+            placeholder="e.g. Black"
             value={form.color}
             onChange={(e) => update("color", e.target.value)}
           />
@@ -320,7 +346,7 @@ export default function ProductForm({ productId }: { productId?: number }) {
           <label className={labelC}>Dimensions (optional)</label>
           <input
             className={input}
-            placeholder="e.g. 100 x 180 cm"
+            placeholder="e.g. Length 100cm"
             value={form.dimensions}
             onChange={(e) => update("dimensions", e.target.value)}
           />
@@ -329,7 +355,7 @@ export default function ProductForm({ productId }: { productId?: number }) {
           <label className={labelC}>Size (optional)</label>
           <input
             className={input}
-            placeholder="e.g. S, M, L or Free Size"
+            placeholder="e.g. S, M, L, XL"
             value={form.size}
             onChange={(e) => update("size", e.target.value)}
           />
@@ -338,12 +364,13 @@ export default function ProductForm({ productId }: { productId?: number }) {
 
       <div className="flex gap-3">
         <div className="flex-1">
-          <label className={labelC}>Stock Quantity</label>
+          <label className={labelC}>Stock Quantity (Auto-calculated if variants exist)</label>
           <input
             className={input}
             type="number"
-            value={form.stockQuantity}
+            value={variants.length > 0 ? variants.reduce((s, v) => s + Number(v.stockQuantity || 0), 0) : form.stockQuantity}
             onChange={(e) => update("stockQuantity", e.target.value)}
+            disabled={variants.length > 0}
           />
         </div>
         <div className="flex-1">
@@ -360,10 +387,9 @@ export default function ProductForm({ productId }: { productId?: number }) {
       {/* قسم Product Variants */}
       <div className="mt-6 rounded-md border border-hairline bg-[#FDFBF7] p-4">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-brown">
-          Product Variants (Colors / Sizes)
+          Product Variants (Sizes / Colors)
         </h3>
 
-        {/* عرض القائمة الحالية للـ Variants */}
         {variants.length > 0 && (
           <div className="mt-3 space-y-2">
             {variants.map((v, i) => (
@@ -388,11 +414,10 @@ export default function ProductForm({ productId }: { productId?: number }) {
           </div>
         )}
 
-        {/* حقول إضافة Variant جديد */}
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <input
             className={input}
-            placeholder="Variant Name (e.g. Ocean Blue)"
+            placeholder="Variant (e.g. Medium / Red)"
             value={varLabel}
             onChange={(e) => setVarLabel(e.target.value)}
             onKeyDown={(e) => {

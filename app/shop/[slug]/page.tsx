@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import Image from "next/image";
+import { useCart } from "../../context/CartContext";
 
 type ProductVariant = {
   id?: number;
   label: string;
-  price?: number;
+  price?: number | null;
   stockQuantity: number;
 };
 
@@ -17,9 +17,14 @@ type Product = {
   description?: string;
   price: number;
   salePrice?: number;
+  material?: string;
+  size?: string;
+  dimensions?: string;
+  color?: string;
   stockQuantity: number;
-  images: string[];
-  variants: ProductVariant[];
+  images?: string[];
+  imageUrls?: string[];
+  variants?: ProductVariant[];
 };
 
 function VariantSelector({
@@ -37,21 +42,31 @@ function VariantSelector({
     <div className="mt-5">
       <p className="mb-2 text-sm font-medium text-brown">{title}</p>
       <div className="flex flex-wrap gap-2">
-        {variants.map((variant, index) => (
-          <button
-            key={variant.id || index}
-            type="button"
-            onClick={() => onSelect(variant)}
-            disabled={variant.stockQuantity === 0}
-            className={`rounded-md border px-3 py-2 text-sm transition-colors ${
-              selectedVariant?.label === variant.label
-                ? "border-brown bg-brown text-white"
-                : "border-hairline text-brown hover:bg-gray-50"
-            } disabled:cursor-not-allowed disabled:opacity-40`}
-          >
-            {variant.label}
-          </button>
-        ))}
+        {variants.map((variant, index) => {
+          const isSelected = selectedVariant?.label === variant.label;
+          const isOutOfStock = variant.stockQuantity === 0;
+
+          return (
+            <button
+              key={variant.id || index}
+              type="button"
+              onClick={() => onSelect(variant)}
+              disabled={isOutOfStock}
+              className={`rounded-md border px-3 py-2 text-sm transition-colors ${
+                isSelected
+                  ? "border-brown bg-brown text-white"
+                  : "border-hairline text-brown hover:bg-gray-50"
+              } disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              <span>{variant.label}</span>
+              {variant.price != null && (
+                <span className={`ml-1 text-xs ${isSelected ? "text-gray-200" : "text-gray-500"}`}>
+                  ({variant.price} EGP)
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -65,6 +80,8 @@ export default function ProductDetailPage({
   const resolvedParams = use(params);
   const slug = resolvedParams.slug;
 
+  const { addItem } = useCart();
+
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -72,24 +89,28 @@ export default function ProductDetailPage({
   const [selectedImage, setSelectedImage] = useState<string>("");
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [addedMessage, setAddedMessage] = useState(false);
 
   useEffect(() => {
     async function fetchProduct() {
       try {
         setLoading(true);
-        const res = await fetch(`http://localhost:8080/api/products/${slug}`);
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+        const res = await fetch(`${baseUrl}/api/products/${slug}`);
+
         if (!res.ok) {
           throw new Error("Product not found");
         }
+
         const data: Product = await res.json();
         setProduct(data);
 
-        // ضبط الصورة الرئيسية الافتراضية
-        if (data.images && data.images.length > 0) {
-          setSelectedImage(data.images[0]);
+        const productImages = data.imageUrls ?? data.images ?? [];
+
+        if (productImages.length > 0) {
+          setSelectedImage(productImages[0]);
         }
 
-        // اختيار أول Variant متوفر
         if (data.variants && data.variants.length > 0) {
           const firstAvailable = data.variants.find((v) => v.stockQuantity > 0) || data.variants[0];
           setSelectedVariant(firstAvailable);
@@ -108,9 +129,27 @@ export default function ProductDetailPage({
 
   const handleSelectVariant = (variant: ProductVariant) => {
     setSelectedVariant(variant);
-    if (quantity > variant.stockQuantity) {
-      setQuantity(Math.max(1, variant.stockQuantity));
+    if (quantity > variant.stockQuantity && variant.stockQuantity > 0) {
+      setQuantity(variant.stockQuantity);
+    } else if (variant.stockQuantity === 0) {
+      setQuantity(1);
     }
+  };
+
+  const handleAddToCart = () => {
+    if (!product) return;
+
+    addItem({
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      price: selectedVariant?.price ?? product.salePrice ?? product.price,
+      imageUrl: (product.imageUrls ?? product.images ?? [])[0] ?? "",
+      attributes: selectedVariant?.label ?? "",
+    }, quantity);
+
+    setAddedMessage(true);
+    setTimeout(() => setAddedMessage(false), 2500);
   };
 
   if (loading) {
@@ -121,15 +160,17 @@ export default function ProductDetailPage({
     return <div className="p-12 text-center text-red-500">Product not found!</div>;
   }
 
+  const allImages = product.imageUrls ?? product.images ?? [];
   const currentPrice = selectedVariant?.price ?? product.salePrice ?? product.price;
   const maxStock = selectedVariant ? selectedVariant.stockQuantity : product.stockQuantity;
 
   return (
     <div className="max-w-4xl mx-auto p-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-      {/* 1. معرض الصور (Image Gallery) */}
+      {/* 1. معرض الصور */}
       <div className="flex flex-col gap-4">
         <div className="relative aspect-square w-full overflow-hidden rounded-lg border bg-gray-50">
           {selectedImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={selectedImage}
               alt={product.name}
@@ -140,10 +181,9 @@ export default function ProductDetailPage({
           )}
         </div>
 
-        {/* المصغرات (Thumbnails) */}
-        {product.images && product.images.length > 1 && (
+        {allImages.length > 1 && (
           <div className="flex gap-2 overflow-x-auto pb-2">
-            {product.images.map((imgUrl, idx) => (
+            {allImages.map((imgUrl, idx) => (
               <button
                 key={idx}
                 type="button"
@@ -152,6 +192,7 @@ export default function ProductDetailPage({
                   selectedImage === imgUrl ? "border-brown ring-2 ring-brown" : "border-gray-200"
                 }`}
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imgUrl} alt="" className="h-full w-full object-cover" />
               </button>
             ))}
@@ -162,19 +203,38 @@ export default function ProductDetailPage({
       {/* 2. تفاصيل المنتج والتفاعل */}
       <div className="flex flex-col">
         <h1 className="font-serif text-3xl text-brown">{product.name}</h1>
-        
+
         <p className="text-2xl font-semibold text-brown mt-2">
-          {currentPrice.toFixed(2)} EGP
+          {Number(currentPrice).toFixed(2)} EGP
         </p>
 
         {product.description && (
           <p className="mt-4 text-sm text-gray-600 leading-relaxed">{product.description}</p>
         )}
 
-        {/* الخيارات المتاحة */}
+        {/* عرض تفاصيل المادة، الأبعاد، والمقاس للعميل */}
+        <div className="mt-4 space-y-1.5 text-sm text-brown-soft">
+          {product.material && (
+            <p>
+              <span className="font-semibold text-brown">Material:</span> {product.material}
+            </p>
+          )}
+          {product.dimensions && (
+            <p>
+              <span className="font-semibold text-brown">Dimensions:</span> {product.dimensions}
+            </p>
+          )}
+          {product.size && (
+            <p>
+              <span className="font-semibold text-brown">Size:</span> {product.size}
+            </p>
+          )}
+        </div>
+
+        {/* الألوان أو الفاريانتس */}
         {product.variants && product.variants.length > 0 && (
           <VariantSelector
-            title="Select Option"
+            title="Options / Variants"
             variants={product.variants}
             selectedVariant={selectedVariant}
             onSelect={handleSelectVariant}
@@ -182,23 +242,21 @@ export default function ProductDetailPage({
         )}
 
         {/* حالة الستوك */}
-        {selectedVariant && (
-          <p className="mt-3 text-xs text-brown-soft">
-            {selectedVariant.stockQuantity === 0
-              ? "Out of stock"
-              : selectedVariant.stockQuantity === 1
-              ? "Only 1 item left in stock!"
-              : `${selectedVariant.stockQuantity} items available`}
-          </p>
-        )}
+        <p className="mt-3 text-xs text-brown-soft">
+          {maxStock === 0
+            ? "Out of stock"
+            : maxStock === 1
+            ? "Only 1 item left in stock!"
+            : `${maxStock} items available`}
+        </p>
 
-        {/* العداد وزر الإضافة */}
+        {/* العداد وزر الإضافة للسلة */}
         <div className="mt-6 flex items-center gap-3">
           <div className="flex items-center border border-hairline rounded-md bg-white px-3 py-2 text-sm">
             <button
               type="button"
               onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              disabled={quantity <= 1}
+              disabled={quantity <= 1 || maxStock === 0}
               className="px-2 text-brown hover:bg-gray-100 rounded disabled:opacity-30"
             >
               -
@@ -216,6 +274,7 @@ export default function ProductDetailPage({
 
           <button
             type="button"
+            onClick={handleAddToCart}
             disabled={maxStock === 0 || ((product.variants?.length ?? 0) > 0 && !selectedVariant)}
             className={`flex-1 rounded-md py-3 text-sm font-medium transition-colors ${
               maxStock > 0
@@ -223,7 +282,7 @@ export default function ProductDetailPage({
                 : "bg-gray-200 text-gray-500 cursor-not-allowed"
             }`}
           >
-            {maxStock === 0 ? "Out of Stock" : "Add to Cart"}
+            {maxStock === 0 ? "Out of Stock" : addedMessage ? "Added to Cart ✓" : "Add to Cart"}
           </button>
         </div>
       </div>

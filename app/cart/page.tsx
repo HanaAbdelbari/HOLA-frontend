@@ -16,8 +16,11 @@ export default function CartPage() {
     setMounted(true);
   }, []);
 
-  const [confirmId, setConfirmId] = useState<number | null>(null);
-  const itemToRemove = items.find((i) => i.id === confirmId);
+  // تخزين العنصر المراد حذفه مع الـ attributes لتمييز اللون بدقة
+  const [confirmItem, setConfirmItem] = useState<{ id: number; attributes: string } | null>(null);
+  const itemToRemove = items.find(
+    (i) => i.id === confirmItem?.id && i.attributes === confirmItem?.attributes
+  );
 
   if (!mounted) {
     return <main className="mx-auto max-w-2xl px-4 py-20" />;
@@ -56,7 +59,7 @@ export default function CartPage() {
           <div className="space-y-4">
             {items.map((item) => (
               <div
-                key={item.id}
+                key={`${item.id}-${item.attributes}`}
                 className="flex gap-4 sm:gap-5 rounded-2xl border border-hairline bg-white p-4 sm:p-5 shadow-sm"
               >
                 <div className="relative h-24 w-24 sm:h-28 sm:w-28 flex-shrink-0 overflow-hidden rounded-md bg-[#F0F9FF]">
@@ -91,7 +94,7 @@ export default function CartPage() {
                     </div>
 
                     <button
-                      onClick={() => setConfirmId(item.id)}
+                      onClick={() => setConfirmItem({ id: item.id, attributes: item.attributes })}
                       aria-label="Remove item"
                       className="text-muted transition-colors hover:text-[#E63946] p-1"
                     >
@@ -197,11 +200,11 @@ export default function CartPage() {
             <Trash2 size={32} className="mx-auto text-[#E63946]" />
             <h3 className="mt-4 font-serif text-xl text-brown">Remove this item?</h3>
             <p className="mt-2 text-sm text-brown-soft">
-              Remove {itemToRemove.name} from your cart?
+              Remove {itemToRemove.name} ({itemToRemove.attributes}) from your cart?
             </p>
             <div className="mt-6 flex gap-3">
               <button
-                onClick={() => setConfirmId(null)}
+                onClick={() => setConfirmItem(null)}
                 className="flex-1 rounded-full border border-brown py-2.5 text-sm font-medium text-brown transition-colors hover:bg-[#F0F9FF]"
               >
                 Cancel
@@ -209,7 +212,7 @@ export default function CartPage() {
               <button
                 onClick={() => {
                   removeItem(itemToRemove.id);
-                  setConfirmId(null);
+                  setConfirmItem(null);
                 }}
                 className="flex-1 rounded-full bg-[#E63946] py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#c92a37]"
               >

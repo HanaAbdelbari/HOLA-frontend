@@ -4,6 +4,16 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 
+type OrderItem = {
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  variantName?: string | null;
+  variantLabel?: string | null;
+  color?: string | null;
+  selectedVariant?: string | null;
+};
+
 type AdminOrder = {
   id: number;
   orderNumber: string;
@@ -16,7 +26,7 @@ type AdminOrder = {
   governorate: string;
   address: string;
   notes: string | null;
-  items: { productName: string; quantity: number; unitPrice: number }[];
+  items: OrderItem[];
 };
 
 // The statuses the admin can set.
@@ -164,11 +174,18 @@ export default function AdminOrdersPage() {
                   <div className="mt-2">
                     <span className="text-brown">Items:</span>
                     <ul className="mt-1 space-y-1">
-                      {order.items.map((item, i) => (
-                        <li key={i}>
-                          {item.productName} × {item.quantity} — EGP {item.unitPrice}
-                        </li>
-                      ))}
+                      {order.items.map((item, i) => {
+                        const variantText = item.variantName || item.variantLabel || item.color || item.selectedVariant;
+                        return (
+                          <li key={i}>
+                            {item.productName}
+                            {variantText && (
+                              <span className="text-brown font-medium"> ({variantText})</span>
+                            )}
+                            {" "}× {item.quantity} — EGP {item.unitPrice}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 </div>

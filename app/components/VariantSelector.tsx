@@ -5,7 +5,7 @@ import { useState } from "react";
 export interface ProductVariant {
   id?: number;
   label: string;
-  price?: number;
+  price?: number | null;
   stockQuantity: number;
 }
 
@@ -20,13 +20,22 @@ export default function VariantSelector({
   variants,
   onSelect,
 }: VariantSelectorProps) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  // حساب الخيار الافتراضي والـ state المبدئي مرة واحدة عند أول رندر
+  const [selectedId, setSelectedId] = useState<number | string | null>(() => {
+    if (!variants || variants.length === 0) return null;
+    const firstAvailable = variants.find((v) => v.stockQuantity > 0) || variants[0];
+    
+    // إبلاغ المكون الأب بالخيار الافتراضي
+    onSelect(firstAvailable);
+    return firstAvailable.id ?? firstAvailable.label;
+  });
 
   if (!variants || variants.length === 0) return null;
 
-  const handleSelect = (variant: ProductVariant, index: number) => {
+  const handleSelect = (variant: ProductVariant) => {
     if (variant.stockQuantity <= 0) return;
-    setSelectedId(variant.id ?? index);
+    const currentId = variant.id ?? variant.label;
+    setSelectedId(currentId);
     onSelect(variant);
   };
 
@@ -38,7 +47,7 @@ export default function VariantSelector({
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
         {variants.map((v, index) => {
-          const currentId = v.id ?? index;
+          const currentId = v.id ?? v.label ?? index;
           const isSelected = selectedId === currentId;
           const isOutOfStock = v.stockQuantity <= 0;
 
@@ -47,15 +56,15 @@ export default function VariantSelector({
               key={currentId}
               type="button"
               disabled={isOutOfStock}
-              onClick={() => handleSelect(v, index)}
+              onClick={() => handleSelect(v)}
               className={`flex flex-col items-center justify-center rounded-lg border py-2.5 px-2 transition-all text-center ${
                 isSelected
-                  ? "border-brown bg-[#F8F2EC] ring-1 ring-brown"
+                  ? "border-brown bg-[#F8F2EC] ring-1 ring-brown font-semibold"
                   : "border-gray-200 bg-white hover:border-brown-soft"
               } ${isOutOfStock ? "opacity-40 cursor-not-allowed bg-gray-50" : "cursor-pointer"}`}
             >
               {/* اسم الخيار */}
-              <span className={`text-sm font-medium ${isSelected ? "text-brown" : "text-gray-800"}`}>
+              <span className={`text-sm ${isSelected ? "text-brown" : "text-gray-800"}`}>
                 {v.label}
               </span>
 
